@@ -51,6 +51,15 @@ def parse_metric(log_str, metric_name):
         # If the pattern is not found, return None
         return "N/A"
 
+def get_run_id_by_name(experiment_id, run_name):
+    print("usin .. ",run_name)
+    df = mlflow.search_runs([experiment_id])
+    df[df["tags.mlflow.runName"] == run_name]
+    # Retrieve the run ID based on the Azure ML run display name specified as an argument
+    run = client.search_runs(experiment_ids=[experiment_id], filter_string=f"tags.mlflow.runName = '{run_name}'")[0]
+    run_id = run.info.run_id
+    return run_id
+
 def get_logs(portal_uri, model_name, deepspeed, run_type, experiment_name, run_id):
 
     current_experiment=dict(mlflow.get_experiment_by_name(experiment_name))
@@ -60,7 +69,13 @@ def get_logs(portal_uri, model_name, deepspeed, run_type, experiment_name, run_i
     experiment = Experiment(workspace, experiment_name)
 
     # Get the script run using the experiment and run ID
-    script_run = ScriptRun(experiment=experiment, run_id=run_id)
+    try:
+        script_run = ScriptRun(experiment=experiment, run_id=run_id)
+    except:
+        print(" Pulling run by name... ")
+        run_id = get_run_id_by_name(experiment_id, run_id)
+        script_run = ScriptRun(experiment=experiment, run_id=run_id)
+
     portal_uri = script_run.get_portal_url()
 
     # Retrieve the logs from the run's artifacts directory
@@ -216,6 +231,8 @@ if __name__ == "__main__":
     unique_run_types = df['run_type'].unique().tolist()
     for run_type in unique_run_types:
         multiindex_columns.append(('avg 2nd half', run_type))
+        
+    for run_type in unique_run_types:
         multiindex_columns.append(('training samples/s', run_type))
 
     merged_df.columns = pd.MultiIndex.from_tuples(multiindex_columns)
