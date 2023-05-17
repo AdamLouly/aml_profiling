@@ -1,0 +1,14 @@
+[
+    {
+    "model_path":"optimum/examples/onnxruntime/training/translation",
+    "command":"torchrun --nproc-per-node=8 run_translation.py --model_name_or_path t5-base --do_train --do_eval --overwrite_output_dir --output_dir ./outputs/ --seed 1337 --fp16 True --per_device_train_batch_size 32 --per_device_eval_batch_size 32 --num_train_epochs 1 --source_lang en --target_lang ro --source_prefix 'translate English to Romanian: ' --dataset_name wmt16 --dataset_config_name ro-en --predict_with_generate --report_to none --optim adamw_ort_fused"
+    },
+    {
+    "model_path":"optimum/examples/onnxruntime/training/language-modeling",
+    "command":"torchrun --nproc-per-node=8 run_mlm.py --model_name_or_path camembert-base --do_train --do_eval --overwrite_output_dir --output_dir ./outputs/ --seed 1337 --fp16 True --per_device_train_batch_size 8 --per_device_eval_batch_size 8 --num_train_epochs 10 --dataset_name wikitext --dataset_config_name wikitext-2-raw-v1 --report_to none --optim adamw_ort_fused"
+    },
+    {
+    "model_path":"optimum/examples/onnxruntime/training/text-classification",
+    "command":"torchrun --nproc-per-node=8 run_glue.py --model_name_or_path finiteautomata/bertweet-base-sentiment-analysis --task_name mnli --do_train --do_eval --per_device_train_batch_size 32 --num_train_epochs 3 --overwrite_output_dir --output_dir ./outputs/ --per_device_eval_batch_size 32 --seed 1337 --fp16 True --max_seq_length 128 --learning_rate 2e-5 --optim adamw_ort_fused"
+    }
+    ]
