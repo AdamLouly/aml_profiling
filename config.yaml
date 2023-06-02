@@ -14,13 +14,21 @@ ENV_NAME: 'env_name'
 # Path to deepspeed config file
 DS_CONFIG_PATH: 'zero1.json'
 
-# Environment variables
-ENVIRONMENT_VARIABLES:
-  ORTMODULE_ENABLE_LABEL_SPARSITY_OPT: '1'
+# Sub configurations
+SUB_CONFIGS:
+  - NAME: 'SubConfig1'
+    RUN_TYPE: 'ort_density'
+    ENVIRONMENT_VARIABLES:
+      ORTMODULE_ENABLE_LABEL_SPARSITY_OPT: '1'
+      ORTMODULE_LOG_LEVEL: 'INFO'
+    TAGS:
+      env_type: 'ort_density'
 
-# Tags
-TAGS:
-  env_type: 'label_sarsity'
-
+  - NAME: 'SubConfig2'
+    RUN_TYPE: 'ort_default'
+    ENVIRONMENT_VARIABLES:
+      ORTMODULE_LOG_LEVEL: 'INFO'
+    TAGS:
+      env_type: 'ort_default'
 
 

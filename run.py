@@ -9,14 +9,9 @@ import re
 import shutil
 import os
 import pandas as pd
-from utils import get_configs, get_env_variables, get_tags, get_prefix
+from utils import get_configs, get_env_variables, get_tags, get_prefix, get_sub_configs
 
 def submit_run(run_command, compute_target, experiment, myenv, pytorch_configuration, docker_config, tags, deepspeed=False):
-    if deepspeed:
-        shutil.copy(config["DS_CONFIG_PATH"], source_path)
-        run_command += " --deepspeed " + config["DS_CONFIG_PATH"]
-        tags["deepspeed"] = "YES"
-
     src = ScriptRunConfig(source_directory=source_path,
                           command=run_command,
                           compute_target=compute_target,
@@ -28,12 +23,33 @@ def submit_run(run_command, compute_target, experiment, myenv, pytorch_configura
 
     mappa["portal_uri"].append(run.get_portal_url())
     mappa["model_name"].append(experiment_name)
-    mappa["deepspeed"].append("YES" if deepspeed else "NO")
+    mappa["deepspeed"].append("NO")
     mappa["run_type"].append(run_type)
     mappa["experiment_name"].append(experiment_name)
     mappa["run_id"].append(run.id)
-
     print("Jobs Submitted .. click here to check it in the portal:", run.get_portal_url())
+    
+    if deepspeed:
+        shutil.copy(config["DS_CONFIG_PATH"], source_path)
+        run_command += " --deepspeed " + config["DS_CONFIG_PATH"]
+        tags["deepspeed"] = "YES"
+        src = ScriptRunConfig(source_directory=source_path,
+                            command=run_command,
+                            compute_target=compute_target,
+                            environment=myenv,
+                            distributed_job_config=pytorch_configuration,
+                            docker_runtime_config=docker_config)
+
+        run = experiment.submit(src, tags=tags)
+
+        mappa["portal_uri"].append(run.get_portal_url())
+        mappa["model_name"].append(experiment_name)
+        mappa["deepspeed"].append("YES")
+        mappa["run_type"].append(run_type)
+        mappa["experiment_name"].append(experiment_name)
+        mappa["run_id"].append(run.id)
+        print("Jobs Submitted .. click here to check it in the portal:", run.get_portal_url())
+    
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser()
@@ -49,43 +65,48 @@ workspace = Workspace(subscription_id, resource_group, workspace_name)
 compute_name = config["COMPUTE_NAME"]
 
 compute_target = ComputeTarget(workspace=workspace, name=compute_name)
+sub_configs = get_sub_configs()
+dfs = []
+for sub_config in sub_configs:
+    
+    myenv = Environment(name=config["ENV_NAME"])
+    myenv.docker.base_image = config["DOCKER_BASE_IMAGE"]
+    myenv.python.user_managed_dependencies = True
+    myenv.python.interpreter_path = "/opt/conda/envs/ptca/bin/python"
+    myenv.environment_variables = get_env_variables(sub_config.get("NAME"))
+    docker_config = DockerConfiguration(use_docker=True, arguments=['--ipc=host'])
 
-myenv = Environment(name=config["ENV_NAME"])
-myenv.docker.base_image = config["DOCKER_BASE_IMAGE"]
-myenv.python.user_managed_dependencies = True
-myenv.python.interpreter_path = "/opt/conda/envs/ptca/bin/python"
-myenv.environment_variables = get_env_variables()
-docker_config = DockerConfiguration(use_docker=True, arguments=['--ipc=host'])
+    pytorch_configuration = PyTorchConfiguration(process_count=1, node_count=1)
 
-pytorch_configuration = PyTorchConfiguration(process_count=1, node_count=1)
-run_type = config["RUN_TYPE"]
 
-columns = ["portal_uri", "model_name", "deepspeed", "run_type", "experiment_name", "run_id"]
-mappa = {col: [] for col in columns}
+    run_type = sub_config.get("RUN_TYPE")
 
-with open('models_details.json', 'r') as f:
-    data = json.load(f)
+    columns = ["portal_uri", "model_name", "deepspeed", "run_type", "experiment_name", "run_id"]
+    mappa = {col: [] for col in columns}
 
-for element in data:
-    source_path = element["model_path"]
+    with open('models_details.json', 'r') as f:
+        data = json.load(f)
 
-    model_name_pattern = r"--model_name_or_path\s+([\w\d\-_/]+)"
-    match = re.search(model_name_pattern, element["command"])
-    model_name_or_path = match.group(1)
-    experiment_name = model_name_or_path.replace("/", "-")
+    for element in data:
+        source_path = element["model_path"]
 
-    run_command = element["command"]
-    experiment = Experiment(workspace, experiment_name)
-    tags = get_tags()
-    run_command = run_command
+        model_name_pattern = r"--model_name_or_path\s+([\w\d\-_/]+)"
+        match = re.search(model_name_pattern, element["command"])
+        model_name_or_path = match.group(1)
+        experiment_name = model_name_or_path.replace("/", "-")
 
-    submit_run(run_command, compute_target, experiment, myenv, pytorch_configuration, docker_config, tags, args.deepspeed)
+        run_command = element["command"]
+        experiment = Experiment(workspace, experiment_name)
+        tags = get_tags(sub_config.get("NAME"))
+        run_command = run_command
 
-# Create DataFrame and save results as CSV.
-df = pd.DataFrame.from_dict(mappa)
+        submit_run(run_command, compute_target, experiment, myenv, pytorch_configuration, docker_config, tags, args.deepspeed)
+
+    # Create DataFrame and save results as CSV.
+    dfs.append(pd.DataFrame.from_dict(mappa))
 
 prefix = get_prefix()
 file_name = f"run_details_{prefix}.csv"
-
+df = pd.concat(dfs)
 df.to_csv(file_name, index=False)
 
